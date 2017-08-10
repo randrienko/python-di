@@ -1,5 +1,6 @@
 from distutils.core import setup
-setup(name='di',
+setup(name='pydi',
       version='1.0',
-      py_modules=['python-di.di'],
+      py_modules=['pydi.di'],
       )
+
