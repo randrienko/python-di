@@ -1,6 +1,5 @@
-#https://www.tutorialspoint.com/spring/spring_bean_bean.htm
-
 import inspect
+from pydi.exceptions import BeanNotExistException, ClassNotFoundException
 
 class BeansContainer:
     def __init__(self):
@@ -11,8 +10,7 @@ class BeansContainer:
             "lazy": False
         }
 
-        self.container = dict()
-       
+        self.container = dict()       
             
     def init_beans(self, beans_config):
         self.beans_config = beans_config
@@ -31,12 +29,11 @@ class BeansContainer:
             if k not in bean:
                 bean[k] = v
                 
-        try:
-            if type(bean["value"]) == str and bean["value"].index("class_path:") == 0:
-                class_path = bean["value"][11:]
-                bean["value"] = self._get_class(class_path)
-        except ValueError:
-            pass
+        
+        if type(bean["value"]) == str and bean["value"].index("class_path:") == 0:
+            class_path = bean["value"][11:]
+            bean["value"] = self._get_class(class_path)
+            
         return bean
 
     def _init_instance(self, bean_info):
@@ -62,12 +59,16 @@ class BeansContainer:
            instance = bean_info["value"]
         return instance
     
-    def _get_class(self, kls):
-        parts = kls.split('.')
+    def _get_class(self, class_path):
+        parts = class_path.split('.')
         module = ".".join(parts[:-1])
-        m = __import__( module )
-        for comp in parts[1:]:
-            m = getattr(m, comp)            
+        try:
+            m = __import__( module )
+            for comp in parts[1:]:
+                m = getattr(m, comp)
+        except ImportError:
+            raise ClassNotFoundException(class_path)
+        
         return m
     
     def get(self, name):
@@ -78,26 +79,7 @@ class BeansContainer:
                 return self._init_instance(d)
             
             self.container[name] = self._init_instance(d)
-            
+        if name not in self.container:
+            raise BeanNotExistException(name)
+        
         return self.container[name]
-
-# ======================
-
-class Singleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-
-class Container(metaclass=Singleton):
-    _beans_container = BeansContainer()        
-        
-    @staticmethod
-    def start(beans_config):
-        Container._beans_container.init_beans(beans_config)
-        
-    @staticmethod    
-    def get(name):
-        return Container._beans_container.get(name)

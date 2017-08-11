@@ -1,6 +1,6 @@
 from distutils.core import setup
 setup(name='pydi',
       version='1.0',
-      py_modules=['pydi.di'],
+      py_modules=['pydi.di', 'pydi.container', 'pydi.exceptions'],
       )
 
