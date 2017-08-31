@@ -72,14 +72,33 @@ class BeansContainer:
         instance = class_definition(*_args)
 
         # initialize object properties
-        for k, v in properties.items():
-            if self._bean_parser.is_bean(v):
-                bean_name = self._bean_parser.parse_bean_name(v)
-                property_value = self.get(bean_name)
-            else:
-                property_value = v
+        for property_name, property_value in properties.items():
+            if type(property_value) is list:
+                value = list()
+                for element in property_value:
+                    if self._bean_parser.is_bean(element):
+                        bean_name = self._bean_parser.parse_bean_name(element)
+                        value.append(self.get(bean_name))
+                    else:
+                        value.append(element)
 
-            instance.__dict__[k] = property_value
+            elif type(property_value) is dict:
+                value = dict()
+                for k, v in property_value:
+                    if self._bean_parser.is_bean(v):
+                        bean_name = self._bean_parser.parse_bean_name(v)
+                        value[k] = self.get(bean_name)
+                    else:
+                        value[k] = v
+
+            elif self._bean_parser.is_bean(property_value):
+                bean_name = self._bean_parser.parse_bean_name(property_value)
+                value = self.get(bean_name)
+
+            else:
+                value = property_value
+
+            instance.__dict__[property_name] = value
 
         return instance
 

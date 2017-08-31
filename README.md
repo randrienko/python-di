@@ -12,9 +12,6 @@
             "value": "class_path:app.TestClass",
             "args": ["bean:test_class2", "some value"]
         },
-        "config_opt": {
-            "value": "the_param",
-        },
     }
     
 ### PIP install
