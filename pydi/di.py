@@ -1,17 +1,28 @@
 import inspect
-from pydi.exceptions import BeanNotExistException, ClassNotFoundException
+
+from six import string_types
+
+from pydi.exceptions import BeanNotExistException, WrongValueException
+from pydi.functions import get_class
+from pydi.parsers import *
+
 
 class BeansContainer:
     def __init__(self):
+        self.beans_config = dict()
         self.default_bean = {
             "value": "",
             "scope": "singleton",
             "args": [],
+            "properties": {},
             "lazy": False
         }
 
-        self.container = dict()       
-            
+        self._bean_parser = BeanNameParser()
+        self._class_path_parser = ClassPathParser()
+
+        self.container = dict()
+           
     def init_beans(self, beans_config):
         self.beans_config = beans_config
         for name in self.beans_config.keys():
@@ -19,66 +30,67 @@ class BeansContainer:
 
     def _init_bean(self, name):
         bean = self.beans_config[name]
-            
-        d = self._init_default_bean(bean)
+
+        d = self._init_default_bean_data(bean)
         if d["scope"] == "singleton" and not d["lazy"]:
-            self.container[name] = self._init_instance(d)
+            self.container[name] = self._activate_bean(d)
             
-    def _init_default_bean(self, bean):
+    def _init_default_bean_data(self, bean):
         for k, v in self.default_bean.items():
             if k not in bean:
                 bean[k] = v
-                
-        
-        if type(bean["value"]) == str and bean["value"].index("class_path:") == 0:
-            class_path = bean["value"][11:]
-            bean["value"] = self._get_class(class_path)
-            
         return bean
+    
+    def _activate_bean(self, bean):
+        """
+        If the value type is class then value return.
+        If the value type is string wit class path then class imports and return.
+        """
 
-    def _init_instance(self, bean_info):
+        if self._class_path_parser.is_class_path(bean["value"]):
+            class_path = self._class_path_parser.parse_class_path(bean["value"])
+            instance = self._get_instance(get_class(class_path), bean["args"], bean["properties"])
 
-        if inspect.isclass(type(bean_info["value"])):
-            args = []
-            for arg in bean_info["args"]:
-                try:
-                    if type(arg) == str and arg.index("bean:") == 0:
-                       arg_bean_name = arg[5:]
-                       args.append(self.get(arg_bean_name))
-                    else:
-                        args.append(arg)
-                    
-                except ValueError:
-                   args.append(arg)
-                   
-            if type( bean_info["value"]) != str:
-                instance = bean_info["value"](*args)
-            else:
-                instance = bean_info["value"]
+        elif self._bean_parser.is_bean(bean["value"]):
+            bean_name = self._bean_parser.parse_bean_name(bean["value"])
+            instance = self.get(bean_name)
         else:
-           instance = bean_info["value"]
+            raise WrongValueException(bean['value'])
+
         return instance
-    
-    def _get_class(self, class_path):
-        parts = class_path.split('.')
-        module = ".".join(parts[:-1])
-        try:
-            m = __import__( module )
-            for comp in parts[1:]:
-                m = getattr(m, comp)
-        except ImportError:
-            raise ClassNotFoundException(class_path)
-        
-        return m
-    
+
+    def _get_instance(self, class_definition, args=[], properties={}):
+        # set arguments for __init_ method
+        _args = []
+        for arg in args:
+            if self._bean_parser.is_bean(arg):
+                bean_name = self._bean_parser.parse_bean_name(arg)
+                _args.append(self.get(bean_name))
+            else:
+                _args.append(arg)
+
+        instance = class_definition(*_args)
+
+        # initialize object properties
+        for k, v in properties.items():
+            if self._bean_parser.is_bean(v):
+                bean_name = self._bean_parser.parse_bean_name(v)
+                property_value = self.get(bean_name)
+            else:
+                property_value = v
+
+            instance.__dict__[k] = property_value
+
+        return instance
+
     def get(self, name):
         if name not in self.container and name in self.beans_config:
-            d = self._init_default_bean(self.beans_config[name])
+            d = self._init_default_bean_data(self.beans_config[name])
             
             if d['scope'] == 'prototype':
-                return self._init_instance(d)
+                return self._activate_bean(d)
             
-            self.container[name] = self._init_instance(d)
+            self.container[name] = self._activate_bean(d)
         if name not in self.container:
             raise BeanNotExistException(name)
         
